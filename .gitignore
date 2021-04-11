@@ -1,0 +1,7 @@
+*.json
+*.log
+*.token
+conf
+Google Photos/*
+log/*
+.vscode/*
