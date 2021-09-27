@@ -96,11 +96,14 @@ CLIENT_SECRET_FILE = "gphoto_oauth.json"
 
 directory = "./Google Photos"
 
-flog = "./log/" + time.strftime("%Y%m%d-%H%M%S") + ".log"
+fname = time.strftime("%Y%m%d-%H%M%S") + ".log"
+
+flog = "./log/" + fname
 
 try:
     service = authorize.init(CLIENT_SECRET_FILE)
 except:
+    get_conf()
     message = create_message(conf, 
                         "pyPhotos: Token has been expired or revoked", 
                         "pyPhotos: Token has been expired or revoked\n" \
@@ -155,49 +158,64 @@ try:
 except:
     pass
 
-for a in album_iterator:
-    album_id = a.get("id")
-    items = media_manager.search_album(album_id)
-    try:
-        for m in items:
-            media = MediaItem(m)
-            output_dir = output_dir_root + a["title"] + "/"
-            if not os.path.isdir(output_dir):
-                os.mkdir(output_dir)
-            if m["id"] not in all_media:
-                continue
-            if m["mediaMetadata"]["creationTime"] not in all_media[m["id"]]:
-                continue
-            filename = all_media[m["id"]][m["mediaMetadata"]["creationTime"]]
-            output_path = output_dir + filename
-            f.write(f"'{output_path}',{os.path.isfile(output_path)}")
-            if not os.path.isfile(output_path):
-                f.write(f"saving {output_path}\n")
-                with open(output_path, 'wb') as output:
-                    output.write(media.raw_download())
-            ftype=m["mimeType"].split('/')[0]
-            if ftype == "image":
-                status=checkImage(output_path)
-                f.write(f",{status}\n")
-            elif ftype == "video":
-                status=checkVideo(output_path)
-                f.write(f",{status}\n")               
+try:
+    for a in album_iterator:
+        album_id = a.get("id")
+        items = media_manager.search_album(album_id)
+        try:
+            for m in items:
+                media = MediaItem(m)
+                output_dir = output_dir_root + a["title"] + "/"
+                if not os.path.isdir(output_dir):
+                    os.mkdir(output_dir)
+                if m["id"] not in all_media:
+                    continue
+                if m["mediaMetadata"]["creationTime"] not in all_media[m["id"]]:
+                    continue
+                filename = all_media[m["id"]][m["mediaMetadata"]["creationTime"]]
+                output_path = output_dir + filename
+                f.write(f"'{output_path}',{os.path.isfile(output_path)}")
+                if not os.path.isfile(output_path):
+                    f.write(f"saving {output_path}\n")
+                    with open(output_path, 'wb') as output:
+                        output.write(media.raw_download())
+                ftype=m["mimeType"].split('/')[0]
+                if ftype == "image":
+                    status=checkImage(output_path)
+                    f.write(f",{status}\n")
+                elif ftype == "video":
+                    status=checkVideo(output_path)
+                    f.write(f",{status}\n")               
 
-            # metadata
-            output_json_path = output_path + ".json"
-            f.write(f"'{output_json_path}',{os.path.isfile(output_json_path)}")
-            if not os.path.isfile(output_json_path):
-                f.write(f"saving {output_json_path}\n")
-                with open(output_json_path, 'w') as output:
-                    json.dump(media.metadata(),output,indent=4)
-            f.write(f",{os.path.isfile(output_json_path)}\n")
-    except:
-        pass
+                # metadata
+                output_json_path = output_path + ".json"
+                f.write(f"'{output_json_path}',{os.path.isfile(output_json_path)}")
+                if not os.path.isfile(output_json_path):
+                    f.write(f"saving {output_json_path}\n")
+                    with open(output_json_path, 'w') as output:
+                        json.dump(media.metadata(),output,indent=4)
+                f.write(f",{os.path.isfile(output_json_path)}\n")
+        except:
+            pass
+except:
+    pass
 
 f.close()
+
+
+get_conf()
+message = create_message(conf, 
+                    "pyPhotos: Report", 
+                    "Attached the report of the last sync.")
+
+message.attach(get_attachment(flog,fname))
+send_mail(conf, message.as_string())
 
 df = pd.read_csv(flog,header=None)
 df.columns = ["file","presence_before","integrity"]
 
 for index, row in df[df["integrity"] == False].iterrows():
-    os.remove(row['file'])
+    try:
+        os.remove(row['file'])
+    except:
+        pass
